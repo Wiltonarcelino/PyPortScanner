@@ -1,4 +1,5 @@
 import socket
+import argparse
 
 def scan_ports(ip, port):
     # Especificar o endereço IP e a o protocolo
@@ -15,13 +16,21 @@ def scan_ports(ip, port):
     else:
         print(f"[-] A porta {port}/TCP no IP {ip} está FECHADA")
 
-        sock.close()
-
-# Teste de bancada 
+    sock.close()
+ 
 
 if __name__ == "__main__":
-    alvo = "1.1.1.1" 
-    porta_teste = 53
+    # Criar manus no terminal
+    parser = argparse.ArgumentParser(description="PyPortScanner - Scanner de portas TCP de Reconhecimento")
 
-    print(f"Escaneando a porta {porta_teste} no IP {alvo}...")
-    scan_ports(alvo, porta_teste)
+    # Definindo as flags (parâmetros) que o script vai receber
+    parser.add_argument("-t", "--target", required=True, help="Endereço IP alvo (ex: 192.168.1.1)")
+    parser.add_argument("-p", "--port", required=True, type=int, help="Porta para testar (ex: 80)")
+
+    # Lê o que foi passado no terminal
+    args = parser.parse_args()
+
+    print(f"[*] Iniciando o scanner no IP {args.target}...\n")
+
+    # Chamando a função scan repassando o que veio do terminal
+    scan_ports(args.target, args.port)
