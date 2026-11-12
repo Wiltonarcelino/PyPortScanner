@@ -1,6 +1,7 @@
 import socket
 import argparse
 import concurrent.futures
+import sys
 
 def scan_ports(ip, port):
     # Especificar o endereço IP e a o protocolo
@@ -70,6 +71,22 @@ def parse_port_range(port_range_str):
         # Se digitar apenas um número, retorna um range com apenas essa porta
         return range(int(port_range_str), int(port_range_str) + 1)
 
+# NOVA FUNÇÃO: Limpa a URL para extrair apenas o endereço IP ou hostname
+def resolve_target(alvo_cru):
+        # 1. Limpa lixos de URL (http, https, barras no final
+        alvo_limpo = alvo_cru.replace("http://", "").replace("https://", "").rstrip("/")
+        alvo_limpo = alvo_limpo.split("/")[0] # Tira caminhos como /admin ou /login
+
+        try:
+            # 2. Pergunta ao DNS qual é o IP do alvo
+            ip_resolvido = socket.gethostbyname(alvo_limpo)
+            return alvo_limpo, ip_resolvido
+        except socket.gaierror:
+            # 3. Tratamendo elegante de erro caso o DNS não consiga resolver o alvo
+            print(f"[!] Erro: Não foi possível resolver o alvo '{alvo_limpo}' para um endereço IP. Verifique se o endereço está correto.")
+            print("[!] Verifique sua conexão com a internet ou se o endereço está correto.")
+            sys.exit(1)
+
 if __name__ == "__main__":
     # Criar manus no terminal
     parser = argparse.ArgumentParser(description="PyPortScanner - Scanner de Redes")
@@ -84,9 +101,13 @@ if __name__ == "__main__":
 
     # Lê o que foi passado no terminal
     args = parser.parse_args()
-    ip_alvo = args.target
 
-    print(f"[*] Iniciando o scanner no IP {args.target} (Aguarde...)\n")
+    print(f"[*] Iniciando o scanner no alvo: {args.target} (Aguarde...)\n")
+    dominio_alvo, ip_alvo = resolve_target(args.target)
+
+    # Mostramos o resultado no terminal para analista ver quem é o alvo
+    if dominio_alvo != ip_alvo:
+        print(f"[*] Alvo resolvido (DNS): {dominio_alvo} -> {ip_alvo}")
 
     # Range de portas a serem escaneadas
     if args.ports:
