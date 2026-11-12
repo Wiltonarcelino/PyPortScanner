@@ -30,6 +30,10 @@ if __name__ == "__main__":
     # Definindo as flags (parâmetros) que o script vai receber
     parser.add_argument("-t", "--target", required=True, help="Endereço IP alvo (ex: 192.168.1.1)")
 
+    # Define as flags (parâmetros) opcionais
+    parser.add_argument("-w", "--workers", type=int, default=50, help= "Número de threads simultâneas (default: 50)")
+    parser.add_argument("--all", action="store_true", help="Escaneia todas as portas (1-65535)")
+
     # Lê o que foi passado no terminal
     args = parser.parse_args()
     ip_alvo = args.target
@@ -37,9 +41,17 @@ if __name__ == "__main__":
     print(f"[*] Iniciando o scanner no IP {args.target} (Aguarde...)\n")
 
     # Range de portas a serem escaneadas
-    port_range = range(1, 1025)
+    if args.all:
+        port_range = range(1, 65536)
+        print(f"[*] Escaneando todas as portas (1-65535)")
+    else:
+        port_range = range(1, 1025)
+        print(f"[*] Escaneando portas padrão (1-1024)")
+
+    print(f"[*] Usando {args.workers} threads simultâneas\n")
+
     # Cria trabalhos pararelos pra testar as portas simultanealmente
-    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
         for porta in port_range:
             executor.submit(scan_ports, ip_alvo, porta)
 
