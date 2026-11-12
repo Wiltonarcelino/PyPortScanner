@@ -7,7 +7,7 @@ def scan_ports(ip, port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     # Defini um tempo limite para a conexão
-    sock.settimeout(0.5)
+    sock.settimeout(1)
 
     # Tenta se conectar a porta especificada 
     resultado = sock.connect_ex((ip, port))
@@ -16,9 +16,44 @@ def scan_ports(ip, port):
         try:
             servico = socket.getservbyport(port, "tcp").upper()
         except:
-            servico = "Serviço desconhecido"
+            servico = "SERVIÇO DESCONHECIDO"
 
-        print(f"[+] A porta {port}/TCP ABERTA \t Serviço: {servico}")
+# --- INÍCIO DO BANNER GRABBING ---
+        banner_info = ""
+        try:
+            # PASSO 1: Escuta passiva (para serviços que falam primeiro, ex: SSH e FTP)
+            resposta = sock.recv(1024).decode('utf-8', errors='ignore').strip()
+            
+            # PASSO 2: Escuta ativa / Probing (se o servidor for web e exigir requisição HTTP)
+            if not resposta:
+                cutucao_http = f"GET / HTTP/1.1\r\nHost: {ip}\r\nUser-Agent: PyPortScanner/1.0\r\nAccept: */*\r\n\r\n"
+                sock.sendall(cutucao_http.encode('utf-8'))
+                resposta = sock.recv(1024).decode('utf-8', errors='ignore').strip()
+            
+            # PASSO 3: Parseamento e formatação do Banner
+            if resposta:
+                banner_limpo = ""
+                # Extração inteligente para cabeçalhos HTTP
+                if "HTTP" in resposta.upper():
+                    for linha in resposta.split('\n'):
+                        if "server:" in linha.lower():
+                            banner_limpo = linha.strip()
+                            break
+                    # Fallback: Se o servidor ocultar a tag Server, captura o Status HTTP
+                    if not banner_limpo:
+                        banner_limpo = resposta.split('\n')[0].strip()
+                
+                # Tratamento para serviços comuns (remoção de quebras de linha)
+                if not banner_limpo:
+                    banner_limpo = resposta.replace('\r', '').replace('\n', ' ')
+                
+                banner_info = f"  --->  [{banner_limpo[:80]}]"
+        except:
+            # Falhas de timeout ou recusa silenciosa de conexão são ignoradas para não travar o scanner
+            pass 
+        # --- FIM DO BANNER GRABBING ---
+
+        print(f"[+] A porta {port}/TCP ABERTA \t Serviço: {servico}{banner_info}")
 
     sock.close()
  
