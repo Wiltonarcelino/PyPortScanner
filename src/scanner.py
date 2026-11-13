@@ -2,6 +2,7 @@ import socket
 import argparse
 import concurrent.futures
 import sys
+import time
 
 def scan_ports(ip, port):
     # Especificar o endereço IP e a o protocolo
@@ -13,12 +14,15 @@ def scan_ports(ip, port):
     # Tenta se conectar a porta especificada 
     resultado = sock.connect_ex((ip, port))
 
+    dados_porta = None
+
     if resultado == 0:
         try:
-            servico = socket.getservbyport(port, "tcp").upper()
+            servico = socket.getservbyport(port, "tcp").lower()
         except:
-            servico = "SERVIÇO DESCONHECIDO"
-
+            servico = "Unknown"
+    # A CORREÇÃO ESTÁ AQUI: Declarar a variável antes do try garante que ela sempre exista
+        banner_limpo = ""
 # --- INÍCIO DO BANNER GRABBING ---
         banner_info = ""
         try:
@@ -48,16 +52,22 @@ def scan_ports(ip, port):
                 if not banner_limpo:
                     banner_limpo = resposta.replace('\r', '').replace('\n', ' ')
                 
-                banner_info = f"  --->  [{banner_limpo[:80]}]"
         except:
             # Falhas de timeout ou recusa silenciosa de conexão são ignoradas para não travar o scanner
             pass 
         # --- FIM DO BANNER GRABBING ---
 
-        print(f"[+] A porta {port}/TCP ABERTA \t Serviço: {servico}{banner_info}")
+        dados_porta = {
+            "porta": port,
+            "status": "Open",
+            "servico": servico,
+            "reason": "syn-ack",
+            "banner": banner_limpo[:50]
+        }
 
     sock.close()
- 
+    return dados_porta
+
 # NOVA FUNÇÃO: Traduz o texto do terminal em um range de portas
 def parse_port_range(port_range_str):
     # separa o range de portas em duas partes (-)
@@ -102,7 +112,6 @@ if __name__ == "__main__":
     # Lê o que foi passado no terminal
     args = parser.parse_args()
 
-    print(f"[*] Iniciando o scanner no alvo: {args.target} (Aguarde...)\n")
     dominio_alvo, ip_alvo = resolve_target(args.target)
 
     # Mostramos o resultado no terminal para analista ver quem é o alvo
@@ -112,19 +121,37 @@ if __name__ == "__main__":
     # Range de portas a serem escaneadas
     if args.ports:
         port_range = parse_port_range(args.ports)
-        print(f"[*] Iniciando scanner customizado (Portas {args.ports})")
     elif args.all:
         port_range = range(1, 65536)
-        print(f"[*] Iniciando scanner completo (65.535 portas).")
     else:
         port_range = range(1, 1025)
-        print(f"[*] Iniciando scanner rápido (1.024 portas)")
 
-    print(f"[*] Usando {args.workers} threads simultâneas\n")
+    print(f"\nStarting PyPortScanner on {dominio_alvo} ({ip_alvo})")
+
+    # Inicia a contagem de tempo
+    start_time = time.time()
+    resultados_abertos = []
 
     # Cria trabalhos pararelos pra testar as portas simultanealmente
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
-        for porta in port_range:
-            executor.submit(scan_ports, ip_alvo, porta)
+        futures = [executor.submit(scan_ports, ip_alvo, porta) for porta in port_range]
 
-    print ("\n[*] escaner finalizado!")
+        for future in concurrent.futures.as_completed(futures):
+            resultado = future.result()
+            if resultado:
+                resultados_abertos.append(resultado)
+
+    # Ordena as portas do menor para o maior antes de exibir
+    resultados_abertos.sort(key=lambda x: x["porta"])
+
+    # Exibe a tabela alinhada
+    print(f"\n[>] Results for {dominio_alvo}:")
+    print(f"     {'PORT':<7} {'STATE':<7} {'SERVICE':<12} {'REASON':<10} BANNER")
+    
+    for r in resultados_abertos:
+        print(f"     {r['porta']:<7} {r['status']:<7} {r['servico']:<12} {r['reason']:<10} {r['banner']}")
+
+    # Calcula o tempo total e exibe o resumo final
+    tempo_total = round(time.time() - start_time, 2)
+    quantidade_portas = len(port_range)
+    print(f"\n[*] Async TCP Connect scan of {quantidade_portas} ports for {dominio_alvo} completed in {tempo_total} seconds")
