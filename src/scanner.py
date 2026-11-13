@@ -3,6 +3,7 @@ import argparse
 import concurrent.futures
 import sys
 import time
+import os
 
 def scan_ports(ip, port):
     # Especificar o endereço IP e a o protocolo
@@ -97,43 +98,13 @@ def resolve_target(alvo_cru):
             print("[!] Verifique sua conexão com a internet ou se o endereço está correto.")
             sys.exit(1)
 
-if __name__ == "__main__":
-    # Criar manus no terminal
-    parser = argparse.ArgumentParser(description="PyPortScanner - Scanner de Redes")
-
-    # Definindo as flags (parâmetros) que o script vai receber
-    parser.add_argument("-t", "--target", required=True, help="Endereço IP alvo (ex: 192.168.1.1)")
-
-    # Define as flags (parâmetros) opcionais
-    parser.add_argument("-w", "--workers", type=int, default=50, help= "Número de threads simultâneas (default: 50)")
-    parser.add_argument("--all", action="store_true", help="Escaneia todas as portas (1-65535)")
-    parser.add_argument("-p", "--ports", type=str, help="Range de portas a serem escaneadas (ex: 1-1024 ou 8080)")
-
-    # Lê o que foi passado no terminal
-    args = parser.parse_args()
-
-    dominio_alvo, ip_alvo = resolve_target(args.target)
-
-    # Mostramos o resultado no terminal para analista ver quem é o alvo
-    if dominio_alvo != ip_alvo:
-        print(f"[*] Alvo resolvido (DNS): {dominio_alvo} -> {ip_alvo}")
-
-    # Range de portas a serem escaneadas
-    if args.ports:
-        port_range = parse_port_range(args.ports)
-    elif args.all:
-        port_range = range(1, 65536)
-    else:
-        port_range = range(1, 1025)
-
+# MOTOR CENTRAL: Roda as threads e imprime a tabela centralizada
+def executar_scanner(dominio_alvo, ip_alvo, port_range, workers):
     print(f"\nStarting PyPortScanner on {dominio_alvo} ({ip_alvo})")
-
-    # Inicia a contagem de tempo
     start_time = time.time()
     resultados_abertos = []
 
-    # Cria trabalhos pararelos pra testar as portas simultanealmente
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [executor.submit(scan_ports, ip_alvo, porta) for porta in port_range]
 
         for future in concurrent.futures.as_completed(futures):
@@ -141,17 +112,83 @@ if __name__ == "__main__":
             if resultado:
                 resultados_abertos.append(resultado)
 
-    # Ordena as portas do menor para o maior antes de exibir
     resultados_abertos.sort(key=lambda x: x["porta"])
 
-    # Exibe a tabela alinhada
     print(f"\n[>] Results for {dominio_alvo}:")
-    print(f"     {'PORT':<7} {'STATE':<7} {'SERVICE':<12} {'REASON':<10} BANNER")
+    print(f"    {'PORT':<7} {'STATE':<7} {'SERVICE':<12} {'REASON':<10} BANNER")
     
     for r in resultados_abertos:
-        print(f"     {r['porta']:<7} {r['status']:<7} {r['servico']:<12} {r['reason']:<10} {r['banner']}")
+        print(f"    {r['porta']:<7} {r['status']:<7} {r['servico']:<12} {r['reason']:<10} {r['banner']}")
 
-    # Calcula o tempo total e exibe o resumo final
     tempo_total = round(time.time() - start_time, 2)
     quantidade_portas = len(port_range)
-    print(f"\n[*] Async TCP Connect scan of {quantidade_portas} ports for {dominio_alvo} completed in {tempo_total} seconds")
+    print(f"\nAsync TCP Connect scan of {quantidade_portas} ports for {dominio_alvo} completed in {tempo_total} seconds\n")
+
+# MODO INTERATIVO (Menu)
+def menu_interativo():
+    print("\n--- PyPortScanner Interactive Mode ---")
+    
+    alvo_input = input("[?] Digite o IP ou URL alvo: ").strip()
+    if not alvo_input:
+        print("[!] Alvo inválido. Saindo...")
+        sys.exit(1)
+        
+    dominio_alvo, ip_alvo = resolve_target(alvo_input)
+    
+    print("\nModos de Varredura:")
+    print(" [1] Rápido (1-1024)")
+    print(" [2] Completo (1-65535)")
+    print(" [3] Customizado (ex: 80 ou 20-100)")
+    
+    opcao = input("[?] Escolha o modo [1]: ").strip()
+    
+    if opcao == "2":
+        port_range = range(1, 65536)
+    elif opcao == "3":
+        port_str = input("[?] Digite o range de portas: ").strip()
+        port_range = parse_port_range(port_str)
+    else:
+        port_range = range(1, 1025)
+
+    workers_input = input("\n[?] Número de threads [50]: ").strip()
+    workers = int(workers_input) if workers_input.isdigit() else 50
+    
+    # Chama o motor central
+    executar_scanner(dominio_alvo, ip_alvo, port_range, workers)
+
+if __name__ == "__main__":
+    # Se o usuário digitou só "python scanner.py" (len == 1), abre o menu
+    if len(sys.argv) == 1:
+        try:
+            menu_interativo()
+        except KeyboardInterrupt:
+            print("\n[!] Saindo...")
+            sys.exit(0)
+    
+    # Se o usuário digitou argumentos (ex: -t 1.1.1.1), vai direto para o modo CLI
+    else:
+        parser = argparse.ArgumentParser(description="PyPortScanner - Scanner de Redes")
+        # required=False para permitir que o script rode sem argumentos no modo interativo
+        parser.add_argument("-t", "--target", required=False, help="Endereço IP alvo (ex: 192.168.1.1)")
+        parser.add_argument("-w", "--workers", type=int, default=50, help="Número de threads simultâneas (default: 50)")
+        parser.add_argument("--all", action="store_true", help="Escaneia todas as portas (1-65535)")
+        parser.add_argument("-p", "--ports", type=str, help="Range de portas a serem escaneadas (ex: 1-1024 ou 8080)")
+
+        args = parser.parse_args()
+        
+        # Como o -t não é mais obrigatório no argparse, validamos ele aqui
+        if not args.target:
+            print("[!] Erro: O argumento -t/--target é obrigatório no modo direto.")
+            sys.exit(1)
+
+        dominio_alvo, ip_alvo = resolve_target(args.target)
+
+        if args.ports:
+            port_range = parse_port_range(args.ports)
+        elif args.all:
+            port_range = range(1, 65536)
+        else:
+            port_range = range(1, 1025)
+
+        # Chama o motor central
+        executar_scanner(dominio_alvo, ip_alvo, port_range, args.workers)
