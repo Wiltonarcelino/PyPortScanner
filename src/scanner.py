@@ -5,6 +5,29 @@ import sys
 import time
 import os
 
+# Ativa o modo de cores no Windows
+if os.name == 'nt':
+    os.system('')
+# Variáveis de cores ANSI para o terminal
+C_CYAN = '\033[96m'
+C_GREEN = '\033[92m'
+C_YELLOW = '\033[93m'
+C_RED = '\033[91m'
+C_RESET = '\033[0m'
+C_BOLD = '\033[1m'
+
+# Função para exibir a logo com v1.0 e By: Will
+def mostrar_banner():
+        print(f"{C_CYAN}{C_BOLD}")
+        print(r" ____        ____            _   ____                                 ")
+        print(r"|  _ \ _   _|  _ \ ___  _ __| |_/ ___|  ___ __ _ _ __  _ __   ___ _ __ ")
+        print(r"| |_) | | | | |_) / _ \| '__| __\___ \ / __/ _` | '_ \| '_ \ / _ \ '__|")
+        print(r"|  __/| |_| |  __/ (_) | |  | |_ ___) | (_| (_| | | | | | | |  __/ |   ")
+        print(r"|_|    \__, |_|   \___/|_|   \__|____/ \___\__,_|_| |_|_| |_|\___|_|   ")
+        print(r"       |___/                                                           ")
+        print(f"                                           {C_YELLOW}v1.0 {C_CYAN}| {C_GREEN}By: Will{C_RESET}\n")
+
+
 def scan_ports(ip, port):
     # Especificar o endereço IP e a o protocolo
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -94,13 +117,13 @@ def resolve_target(alvo_cru):
             return alvo_limpo, ip_resolvido
         except socket.gaierror:
             # 3. Tratamendo elegante de erro caso o DNS não consiga resolver o alvo
-            print(f"[!] Erro: Não foi possível resolver o alvo '{alvo_limpo}' para um endereço IP. Verifique se o endereço está correto.")
-            print("[!] Verifique sua conexão com a internet ou se o endereço está correto.")
+            print(f"\n{C_RED}[!] Erro: Não foi possível resolver o alvo '{alvo_limpo}' para um endereço IP. Verifique se o endereço está correto.{C_RESET}")
+            print(f"{C_YELLOW}[!] Verifique sua conexão com a internet ou se o endereço está correto.{C_RESET}")
             sys.exit(1)
 
 # MOTOR CENTRAL: Roda as threads e imprime a tabela centralizada
 def executar_scanner(dominio_alvo, ip_alvo, port_range, workers):
-    print(f"\nStarting PyPortScanner on {dominio_alvo} ({ip_alvo})")
+    print(f"\n{C_CYAN}Starting PyPortScanner on {C_BOLD}{dominio_alvo} ({ip_alvo}){C_RESET}")
     start_time = time.time()
     resultados_abertos = []
 
@@ -114,43 +137,44 @@ def executar_scanner(dominio_alvo, ip_alvo, port_range, workers):
 
     resultados_abertos.sort(key=lambda x: x["porta"])
 
-    print(f"\n[>] Results for {dominio_alvo}:")
-    print(f"    {'PORT':<7} {'STATE':<7} {'SERVICE':<12} {'REASON':<10} BANNER")
+    print(f"\n{C_GREEN}[>] Results for {dominio_alvo}:{C_RESET}")
+    print(f"{C_BOLD}    {'PORT':<7} {'STATE':<7} {'SERVICE':<12} {'REASON':<10} BANNER")
     
     for r in resultados_abertos:
-        print(f"    {r['porta']:<7} {r['status']:<7} {r['servico']:<12} {r['reason']:<10} {r['banner']}")
+        status_colorido = f"{C_GREEN}{r['status']:<7}{C_RESET}"
+        print(f"    {r['porta']:<7} {status_colorido} {r['servico']:<12} {r['reason']:<10} {r['banner']}")
 
     tempo_total = round(time.time() - start_time, 2)
     quantidade_portas = len(port_range)
-    print(f"\nAsync TCP Connect scan of {quantidade_portas} ports for {dominio_alvo} completed in {tempo_total} seconds\n")
+    print(f"\n{C_CYAN}[*]Async TCP Connect scan of {quantidade_portas} ports for {dominio_alvo} completed in {tempo_total} seconds{C_RESET}\n")
 
 # MODO INTERATIVO (Menu)
 def menu_interativo():
-    print("\n--- PyPortScanner Interactive Mode ---")
-    
-    alvo_input = input("[?] Digite o IP ou URL alvo: ").strip()
+    #Chamar o banner antes de iniciar as perguntas
+    mostrar_banner()
+    alvo_input = input(f"{C_YELLOW}[?] Digite o IP ou URL alvo: {C_RESET}").strip()
     if not alvo_input:
-        print("[!] Alvo inválido. Saindo...")
+        print(f"{C_RED}[!] Alvo inválido. Saindo...{C_RESET}")
         sys.exit(1)
-        
+    
     dominio_alvo, ip_alvo = resolve_target(alvo_input)
     
-    print("\nModos de Varredura:")
-    print(" [1] Rápido (1-1024)")
-    print(" [2] Completo (1-65535)")
-    print(" [3] Customizado (ex: 80 ou 20-100)")
+    print(f"\n{C_CYAN}Modos de Varredura:{C_RESET}")
+    print(f" {C_BOLD}[1]{C_RESET} Rápido (1-1024)")
+    print(f" {C_BOLD}[2]{C_RESET} Completo (1-65535)")
+    print(f" {C_BOLD}[3]{C_RESET} Customizado (ex: 80 ou 20-100)")
     
-    opcao = input("[?] Escolha o modo [1]: ").strip()
+    opcao = input(f"\n{C_YELLOW}[?] Escolha o modo [1]: {C_RESET}").strip()
     
     if opcao == "2":
         port_range = range(1, 65536)
     elif opcao == "3":
-        port_str = input("[?] Digite o range de portas: ").strip()
+        port_str = input(f"{C_YELLOW}[?] Digite o range de portas: {C_RESET}").strip()
         port_range = parse_port_range(port_str)
     else:
         port_range = range(1, 1025)
 
-    workers_input = input("\n[?] Número de threads [50]: ").strip()
+    workers_input = input(f"{C_YELLOW}\n[?] Número de threads [50]: {C_RESET}").strip()
     workers = int(workers_input) if workers_input.isdigit() else 50
     
     # Chama o motor central
@@ -162,11 +186,12 @@ if __name__ == "__main__":
         try:
             menu_interativo()
         except KeyboardInterrupt:
-            print("\n[!] Saindo...")
+            print(f"\n{C_RED}[!] Operação cancelada. Saindo...{C_RESET}")
             sys.exit(0)
     
     # Se o usuário digitou argumentos (ex: -t 1.1.1.1), vai direto para o modo CLI
     else:
+        
         parser = argparse.ArgumentParser(description="PyPortScanner - Scanner de Redes")
         # required=False para permitir que o script rode sem argumentos no modo interativo
         parser.add_argument("-t", "--target", required=False, help="Endereço IP alvo (ex: 192.168.1.1)")
@@ -178,7 +203,7 @@ if __name__ == "__main__":
         
         # Como o -t não é mais obrigatório no argparse, validamos ele aqui
         if not args.target:
-            print("[!] Erro: O argumento -t/--target é obrigatório no modo direto.")
+            print(f"{C_RED}[!] Erro: O argumento -t/--target é obrigatório no modo direto.{C_RESET}")
             sys.exit(1)
 
         dominio_alvo, ip_alvo = resolve_target(args.target)
